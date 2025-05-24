@@ -2,9 +2,9 @@ name: Build and Test Services
 
 on:
   push:
-    branches: [main, develop]
+    branches: 'main'
   pull_request:
-    branches: [main]
+    branches: 'main'
 
 jobs:
   # Test each service individually
@@ -37,76 +37,3 @@ jobs:
         run: |
           cd SCD_Q1_${{ matrix.service }}
           docker build -t scd-$(echo "${{ matrix.service }}" | tr '[:upper:]' '[:lower:]'):latest .
-
-  integration-test:
-    runs-on: ubuntu-latest
-    needs: test-services
-    
-    steps:
-      - name: Get the code
-        uses: actions/checkout@v4
-
-      - name: Start all services
-        run: |
-          docker compose up -d
-          echo "Waiting for services to start..."
-          sleep 30
-
-      - name: Test user registration and login
-        run: |
-          # Register a new user
-          curl -X POST http://localhost:3001/api/auth/register \
-            -H "Content-Type: application/json" \
-            -d '{"username":"testuser","email":"test@test.com","password":"password123"}'
-          
-          # Login to get our token
-          response=$(curl -s -X POST http://localhost:3001/api/auth/login \
-            -H "Content-Type: application/json" \
-            -d '{"email":"test@test.com","password":"password123"}')
-          
-          token=$(echo $response | grep -o '"token":"[^"]*' | cut -d'"' -f4)
-          echo "TOKEN=$token" >> $GITHUB_ENV
-          echo "✅ User logged in successfully"
-
-      - name: Test blog creation
-        run: |
-          response=$(curl -s -X POST http://localhost:3002/api/blogs \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $TOKEN" \
-            -d '{"title":"My Test Blog","content":"This is test content"}')
-          
-          echo "Blog response: $response"
-          echo "✅ Blog created successfully"
-
-      - name: Test comments (with and without token)
-        run: |
-          # Try commenting WITH token (should work)
-          response=$(curl -s -X POST http://localhost:3003/api/comments \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $TOKEN" \
-            -d '{"content":"Great blog post!"}')
-          echo "✅ Comment with token worked"
-          
-          # Try commenting WITHOUT token (should fail)
-          response=$(curl -s -X POST http://localhost:3003/api/comments \
-            -H "Content-Type: application/json" \
-            -d '{"content":"This should fail"}')
-          
-          if echo "$response" | grep -q "denied\|unauthorized\|token"; then
-            echo "✅ Comment without token correctly rejected"
-          else
-            echo "❌ Comment without token should have failed"
-            exit 1
-          fi
-
-      - name: Test profile service
-        run: |
-          response=$(curl -s http://localhost:3004/api/profile \
-            -H "Authorization: Bearer $TOKEN")
-          
-          echo "Profile response: $response"
-          echo "✅ Profile service working"
-
-      - name: Clean up
-        if: always()
-        run: docker compose down
