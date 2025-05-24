@@ -2,7 +2,7 @@ name: Build and Test Services
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
     branches: [main]
 
@@ -36,7 +36,7 @@ jobs:
       - name: Build Docker image
         run: |
           cd SCD_Q1_${{ matrix.service }}
-          docker build -t scd-${{ matrix.service }}:latest .
+          docker build -t scd-$(echo "${{ matrix.service }}" | tr '[:upper:]' '[:lower:]'):latest .
 
   # Test everything working together
   integration-test:
@@ -67,7 +67,7 @@ jobs:
           
           token=$(echo $response | grep -o '"token":"[^"]*' | cut -d'"' -f4)
           echo "TOKEN=$token" >> $GITHUB_ENV
-          echo "User logged in successfully"
+          echo "✅ User logged in successfully"
 
       - name: Test blog creation
         run: |
@@ -77,19 +77,16 @@ jobs:
             -d '{"title":"My Test Blog","content":"This is test content"}')
           
           echo "Blog response: $response"
-          echo "Blog created successfully"
+          echo "✅ Blog created successfully"
 
       - name: Test comments (with and without token)
         run: |
-          # Get a blog to comment on
-          blogs=$(curl -s http://localhost:3002/api/blogs)
-          
           # Try commenting WITH token (should work)
-          curl -X POST http://localhost:3003/api/comments \
+          response=$(curl -s -X POST http://localhost:3003/api/comments \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $TOKEN" \
-            -d '{"content":"Great blog post!"}'
-          echo "Comment with token worked"
+            -d '{"content":"Great blog post!"}')
+          echo "✅ Comment with token worked"
           
           # Try commenting WITHOUT token (should fail)
           response=$(curl -s -X POST http://localhost:3003/api/comments \
@@ -97,9 +94,9 @@ jobs:
             -d '{"content":"This should fail"}')
           
           if echo "$response" | grep -q "denied\|unauthorized\|token"; then
-            echo "Comment without token correctly rejected"
+            echo "✅ Comment without token correctly rejected"
           else
-            echo "Comment without token should have failed"
+            echo "❌ Comment without token should have failed"
             exit 1
           fi
 
@@ -109,7 +106,7 @@ jobs:
             -H "Authorization: Bearer $TOKEN")
           
           echo "Profile response: $response"
-          echo "Profile service working"
+          echo "✅ Profile service working"
 
       - name: Clean up
         if: always()
